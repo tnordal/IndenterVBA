@@ -42,14 +42,14 @@ namespace IndenterVBA
                 // Avoid duplicate menu
                 foreach (Office.CommandBarControl ctrl in toolsMenu.Controls)
                 {
-                    if (ctrl.Caption == "Indent VBA Code")
+                    if (ctrl.Caption == "Indent Active Module")
                         return;
                 }
 
                 indentButton = (Office.CommandBarButton)toolsMenu.Controls.Add(
                     Office.MsoControlType.msoControlButton,
                     Temporary: true);
-                indentButton.Caption = "Indent VBA Code";
+                indentButton.Caption = "Indent Active Module";
                 indentButton.FaceId = 59; // Set a standard icon
                 indentButton.Visible = true;
                 indentButton.Click += new Office._CommandBarButtonEvents_ClickEventHandler(IndentButton_Click);
@@ -75,15 +75,26 @@ namespace IndenterVBA
 
         private void IndentButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
         {
-            IndentAllVbaModules();
-            System.Windows.Forms.MessageBox.Show("VBA code indented.");
+            IndentActiveModule();
         }
 
-        private void IndentAllVbaModules()
+        private void IndentActiveModule()
         {
-            var app = this.Application;
-            VBIDE.VBProject vbProject = app.VBE.ActiveVBProject;
-            vbaIndenter.IndentAllModules(vbProject);
+            try
+            {
+                var app = this.Application;
+                if (app.VBE.ActiveVBProject == null)
+                {
+                    System.Windows.Forms.MessageBox.Show("No active VBA project found.");
+                    return;
+                }
+                
+                vbaIndenter.IndentAllModules(app.VBE.ActiveVBProject);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Forms.MessageBox.Show("Error: " + ex.Message);
+            }
         }
 
         #region VSTO generated code
