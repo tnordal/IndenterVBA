@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Linq;
 using VBIDE = Microsoft.Vbe.Interop;
 
 namespace IndenterVBA
@@ -54,8 +55,8 @@ namespace IndenterVBA
                 // Log original code
                 File.WriteAllText("C:\\Temp\\Original_Code.txt", code);
 
-                // Find all Sub and Function boundaries and indent them
-                log.AppendLine("\nFinding and indenting procedures:");
+                // Process and indent the code
+                log.AppendLine("\nIndenting procedures:");
                 string indentedCode = IndentCode(code, log);
 
                 // Write the indented code to a log file for verification
@@ -71,7 +72,7 @@ namespace IndenterVBA
                 // Write log
                 File.WriteAllText("C:\\Temp\\VbaIndentLog.txt", log.ToString());
 
-                MessageBox.Show("Indentation complete. Check C:\\Temp\\VbaIndentLog.txt for details.");
+                MessageBox.Show("Indentation complete. Check C:\\Temp\\VbaIndentLog.txt for details and C:\\Temp\\Pass_*.txt for debugging information.");
             }
             catch (Exception ex)
             {
@@ -84,199 +85,534 @@ namespace IndenterVBA
         {
             // Split code into lines
             string[] lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            StringBuilder indentedCode = new StringBuilder();
             
-            // Find all procedure boundaries first
-            List<Procedure> procedures = FindProcedureBoundaries(code, log);
+            // Find all procedures in the code
+            List<ProcedureInfo> procedures = FindProcedures(lines, log);
             
-            // Process each line and apply indentation
-            for (int i = 0; i < lines.Length; i++)
+            // Process each procedure with the simplified level-based indentation
+            foreach (var procedure in procedures)
             {
-                // Current line number (0-based)
-                int lineIndex = i;
-                
-                // Check if this line is inside a procedure
-                Procedure currentProc = procedures.Find(p => lineIndex >= p.StartLineIndex && lineIndex <= p.EndLineIndex);
-                
-                if (currentProc != null)
-                {
-                    // Inside a procedure - apply indentation rules
-                    string line = lines[lineIndex];
-                    string trimmedLine = line.Trim();
-                    
-                    // Check if this is the procedure declaration or end
-                    if (lineIndex == currentProc.StartLineIndex || lineIndex == currentProc.EndLineIndex)
-                    {
-                        // No indentation for procedure declaration and End Sub/Function
-                        indentedCode.AppendLine(trimmedLine);
-                    }
-                    else if (string.IsNullOrWhiteSpace(trimmedLine))
-                    {
-                        // Preserve empty lines
-                        indentedCode.AppendLine("");
-                    }
-                    else 
-                    {
-                        // Check if this is in the declaration block at the top of the procedure
-                        bool isInDeclarationBlock = IsInDeclarationBlock(lineIndex, currentProc, lines);
-                        
-                        if (isInDeclarationBlock)
-                        {
-                            // No indentation for declarations
-                            indentedCode.AppendLine(trimmedLine);
-                        }
-                        else
-                        {
-                            // This is regular code inside the procedure body - indent it
-                            indentedCode.AppendLine("    " + trimmedLine);
-                        }
-                    }
-                }
-                else
-                {
-                    // Outside any procedure - no indentation
-                    indentedCode.AppendLine(lines[lineIndex].Trim());
-                }
+                SimpleMultiPassIndentation(lines, procedure, log);
+            }
+            
+            // Combine the indented lines back into a single string
+            StringBuilder indentedCode = new StringBuilder();
+            foreach (string line in lines)
+            {
+                indentedCode.AppendLine(line);
             }
             
             return indentedCode.ToString();
         }
-
-        private List<Procedure> FindProcedureBoundaries(string code, StringBuilder log)
+        
+        private void SimpleMultiPassIndentation(string[] lines, ProcedureInfo procedure, StringBuilder log)
         {
-            List<Procedure> procedures = new List<Procedure>();
+            log.AppendLine($"Processing {procedure.Type} {procedure.Name}");
             
-            // Split code into lines
-            string[] lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-
-            // Track procedure boundaries
-            for (int i = 0; i < lines.Length; i++)
+            // Directory for debug files
+            string debugDir = "C:\\Temp";
+            Directory.CreateDirectory(debugDir);
+            
+            // Pass 1: Reset all lines in the procedure to have no indentation
+            StringBuilder resetText = new StringBuilder();
+            for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
             {
-                string trimmedLine = lines[i].Trim();
-                
-                // Check for procedure start (Sub or Function with optional Public/Private)
-                Regex procStartRegex = new Regex(@"^\s*(Public\s+|Private\s+|Friend\s+)?(Sub|Function)\s+", 
-                                               RegexOptions.IgnoreCase);
-                
-                Match match = procStartRegex.Match(trimmedLine);
-                if (match.Success && !trimmedLine.StartsWith("End ", StringComparison.OrdinalIgnoreCase))
+                lines[i] = lines[i].TrimStart();
+                resetText.AppendLine(lines[i]);
+            }
+            File.WriteAllText(Path.Combine(debugDir, $"Pass_1_Reset_{procedure.Name}.txt"), resetText.ToString());
+            
+            // Pass 2: Identify blocks and their structure
+            List<Tuple<int, int>> blockRanges = IdentifyBlockRanges(lines, procedure);
+            
+            // Create debug output for block structure
+            StringBuilder blockDebug = new StringBuilder();
+            blockDebug.AppendLine($"Identified {blockRanges.Count} code blocks in {procedure.Name}:");
+            foreach (var range in blockRanges)
+            {
+                string startLine = lines[range.Item1].Trim();
+                string endLine = lines[range.Item2].Trim();
+                blockDebug.AppendLine($"Block from line {range.Item1 + 1} to {range.Item2 + 1}");
+                blockDebug.AppendLine($"  Start: {startLine}");
+                blockDebug.AppendLine($"  End: {endLine}");
+            }
+            File.WriteAllText(Path.Combine(debugDir, $"Pass_2_Blocks_{procedure.Name}.txt"), blockDebug.ToString());
+            
+            // Pass 3: Indent procedure-level statements (level 0)
+            ApplyInitialIndentation(lines, procedure);
+            StringBuilder level0Text = new StringBuilder();
+            for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+            {
+                level0Text.AppendLine(lines[i]);
+            }
+            File.WriteAllText(Path.Combine(debugDir, $"Pass_3_Level0_{procedure.Name}.txt"), level0Text.ToString());
+            
+            // Create a mapping of each line to its indentation level
+            Dictionary<int, int> lineIndentLevels = new Dictionary<int, int>();
+            
+            // Pass 4: Process each block level by level
+            int maxLevel = blockRanges.Count > 0 ? blockRanges.Count : 0;
+            
+            // First, organize blocks by their nesting level
+            Dictionary<int, List<Tuple<int, int>>> blocksByLevel = OrganizeBlocksByLevel(blockRanges, lines);
+            
+            // Process blocks level by level
+            for (int level = 1; level <= maxLevel; level++)
+            {
+                if (blocksByLevel.ContainsKey(level))
                 {
-                    // Found procedure start
-                    string name = ExtractProcedureName(trimmedLine);
-                    int startLine = i + 1; // 1-based line numbers for display
-                    int startLineIndex = i; // 0-based index for array access
+                    // Apply indentation for this level's blocks
+                    ApplyLevelIndentation(lines, blocksByLevel[level], level);
                     
-                    log.AppendLine($"Procedure: {name}, Start Line: {startLine}");
-                    log.AppendLine($"  Declaration: {trimmedLine}");
-
-                    // Find the end of this procedure
-                    int endLine = -1;
-                    int endLineIndex = -1;
-                    
-                    for (int j = i + 1; j < lines.Length; j++)
+                    // Output the state after this level
+                    StringBuilder levelText = new StringBuilder();
+                    for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
                     {
-                        string endLineText = lines[j].Trim();
-                        if (endLineText.Equals("End Sub", StringComparison.OrdinalIgnoreCase) || 
-                            endLineText.Equals("End Function", StringComparison.OrdinalIgnoreCase))
+                        levelText.AppendLine(lines[i]);
+                    }
+                    File.WriteAllText(Path.Combine(debugDir, $"Pass_4_Level{level}_{procedure.Name}.txt"), levelText.ToString());
+                }
+            }
+            
+            // Pass 5: Special cases (error handling)
+            ProcessErrorHandling(lines, procedure);
+            
+            // Final output
+            StringBuilder finalText = new StringBuilder();
+            for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+            {
+                finalText.AppendLine(lines[i]);
+            }
+            File.WriteAllText(Path.Combine(debugDir, $"Pass_5_Final_{procedure.Name}.txt"), finalText.ToString());
+        }
+
+        private List<Tuple<int, int>> IdentifyBlockRanges(string[] lines, ProcedureInfo procedure)
+        {
+            List<Tuple<int, int>> blockRanges = new List<Tuple<int, int>>();
+            Stack<int> blockStarts = new Stack<int>();
+            Dictionary<string, string> blockEndKeywords = new Dictionary<string, string>
+            {
+                { "for", "next" },
+                { "for each", "next" },
+                { "do", "loop" },
+                { "while", "wend" },
+                { "if", "end if" },
+                { "select case", "end select" },
+                { "with", "end with" }
+            };
+            
+            for (int i = procedure.StartLineIndex + 1; i < procedure.EndLineIndex; i++)
+            {
+                string line = lines[i].Trim().ToLower();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                
+                // Check for block start
+                bool isStart = false;
+                string startKeyword = "";
+                
+                foreach (var keyword in blockEndKeywords.Keys)
+                {
+                    if (line.StartsWith(keyword + " ") || line == keyword)
+                    {
+                        isStart = true;
+                        startKeyword = keyword;
+                        break;
+                    }
+                }
+                
+                // Handle If statements separately
+                if (line.StartsWith("if ") && line.EndsWith(" then") && !line.Contains("then:"))
+                {
+                    isStart = true;
+                    startKeyword = "if";
+                }
+                
+                if (isStart)
+                {
+                    blockStarts.Push(i);
+                }
+                
+                // Check for block end
+                bool isEnd = false;
+                string matchingStart = "";
+                
+                foreach (var pair in blockEndKeywords)
+                {
+                    if (line.StartsWith(pair.Value))
+                    {
+                        isEnd = true;
+                        matchingStart = pair.Key;
+                        break;
+                    }
+                }
+                
+                if (isEnd && blockStarts.Count > 0)
+                {
+                    int startLine = blockStarts.Pop();
+                    string startLineText = lines[startLine].Trim().ToLower();
+                    
+                    // Verify this is a matching pair
+                    bool isMatchingPair = false;
+                    foreach (var pair in blockEndKeywords)
+                    {
+                        if ((startLineText.StartsWith(pair.Key + " ") || startLineText == pair.Key) && 
+                            line.StartsWith(pair.Value))
                         {
-                            endLine = j + 1; // 1-based line numbers for display
-                            endLineIndex = j; // 0-based index for array access
-                            log.AppendLine($"  End Line: {endLine}");
-                            
-                            // Add procedure to our list
-                            procedures.Add(new Procedure
-                            {
-                                Name = name,
-                                StartLineIndex = startLineIndex,
-                                EndLineIndex = endLineIndex
-                            });
-                            
+                            isMatchingPair = true;
                             break;
                         }
                     }
                     
-                    // If no end was found, log that information
-                    if (endLine == -1)
+                    // If this is a matching pair, add to block ranges
+                    if (isMatchingPair)
                     {
-                        log.AppendLine($"  WARNING: No matching End Sub/Function found!");
+                        blockRanges.Add(new Tuple<int, int>(startLine, i));
+                    }
+                    else
+                    {
+                        // Push the start back, as this wasn't a match
+                        blockStarts.Push(startLine);
+                    }
+                }
+            }
+            
+            return blockRanges;
+        }
+        
+        private Dictionary<int, List<Tuple<int, int>>> OrganizeBlocksByLevel(List<Tuple<int, int>> blockRanges, string[] lines)
+        {
+            var result = new Dictionary<int, List<Tuple<int, int>>>();
+            
+            // First, sort all blocks by their start line
+            blockRanges = blockRanges.OrderBy(r => r.Item1).ToList();
+            
+            // Determine the nesting level for each block
+            foreach (var block in blockRanges)
+            {
+                int level = 1; // Default level is 1
+                
+                // Check if this block is nested inside any other blocks
+                foreach (var outerBlock in blockRanges)
+                {
+                    // If the current block is completely contained in another block,
+                    // and it's not the same block, increase its level
+                    if (block.Item1 > outerBlock.Item1 && block.Item2 < outerBlock.Item2)
+                    {
+                        level++;
+                    }
+                }
+                
+                // Add this block to the appropriate level list
+                if (!result.ContainsKey(level))
+                {
+                    result[level] = new List<Tuple<int, int>>();
+                }
+                result[level].Add(block);
+            }
+            
+            return result;
+        }
+        
+        private void ApplyInitialIndentation(string[] lines, ProcedureInfo procedure)
+        {
+            // Declarations are at the start and get no indentation
+            bool inDeclarationSection = true;
+            
+            for (int i = procedure.StartLineIndex + 1; i < procedure.EndLineIndex; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                
+                // Check if this is a declaration
+                if (inDeclarationSection && IsDeclarationLine(line))
+                {
+                    // No indentation for declarations
+                    lines[i] = line;
+                }
+                else
+                {
+                    // Once we hit a non-declaration, all following lines are indented
+                    inDeclarationSection = false;
+                    
+                    // Add basic indentation (4 spaces) to the procedure body
+                    lines[i] = "    " + line;
+                }
+            }
+        }
+
+        private void ApplyLevelIndentation(string[] lines, List<Tuple<int, int>> blocks, int level)
+        {
+            foreach (var block in blocks)
+            {
+                int startLine = block.Item1;
+                int endLine = block.Item2;
+                string startLineText = lines[startLine].Trim();
+                string endLineText = lines[endLine].Trim();
+                
+                // Calculate indentation for this level
+                string indent = new string(' ', level * 4);
+                
+                // Apply indentation to block start and end lines
+                lines[startLine] = indent + startLineText;
+                lines[endLine] = indent + endLineText;
+                
+                // Apply indentation to lines inside the block
+                ApplyContentIndentation(lines, startLine, endLine, level);
+            }
+        }
+        
+        private void ApplyContentIndentation(string[] lines, int startLine, int endLine, int level)
+        {
+            // Get the block type from the start line
+            string blockStart = lines[startLine].Trim().ToLower();
+            bool isForEachBlock = blockStart.StartsWith("for each ");
+            
+            // Apply indentation to content lines
+            for (int i = startLine + 1; i < endLine; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                
+                // Special case handling for block midpoints (else, elseif, case)
+                if (IsBlockMidpoint(line))
+                {
+                    // Block midpoints get the same indentation as the block start
+                    lines[i] = new string(' ', level * 4) + line;
+                }
+                // Lines inside the block that aren't already the start/end of another block
+                // and aren't block midpoints get one more level of indentation
+                else if (!IsBlockBoundary(line))
+                {
+                    // Contents get indented one more level
+                    lines[i] = new string(' ', (level + 1) * 4) + line;
+                }
+            }
+        }
+        
+        private bool IsBlockMidpoint(string line)
+        {
+            line = line.ToLower();
+            return line == "else" || 
+                   line.StartsWith("elseif ") || 
+                   line.StartsWith("case ") || 
+                   line == "case else";
+        }
+        
+        private bool IsBlockBoundary(string line)
+        {
+            line = line.ToLower();
+            
+            // Check if this is a block start
+            if (line.StartsWith("for ") || 
+                line.StartsWith("for each ") || 
+                line.StartsWith("do ") || 
+                line == "do" ||
+                (line.StartsWith("if ") && line.EndsWith(" then") && !line.Contains("then:")) ||
+                line.StartsWith("while ") ||
+                line.StartsWith("select case") ||
+                line.StartsWith("with "))
+            {
+                return true;
+            }
+            
+            // Check if this is a block end
+            if (line.StartsWith("next") ||
+                line.StartsWith("loop") ||
+                line.StartsWith("end if") ||
+                line.StartsWith("wend") ||
+                line.StartsWith("end select") ||
+                line.StartsWith("end with"))
+            {
+                return true;
+            }
+            
+            return false;
+        }
+        
+        private void ProcessErrorHandling(string[] lines, ProcedureInfo procedure)
+        {
+            for (int i = procedure.StartLineIndex + 1; i < procedure.EndLineIndex; i++)
+            {
+                string line = lines[i].Trim().ToLower();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                
+                // Handle error handling statements
+                if (line.StartsWith("on error "))
+                {
+                    // Get the current indentation level (preserve it)
+                    int currentIndent = GetIndentationLevel(lines[i]);
+                    string indentation = new string(' ', currentIndent);
+                    
+                    // Apply indentation to the On Error statement
+                    lines[i] = indentation + line;
+                    
+                    // Check for On Error Resume Next pattern
+                    if (line.Contains("resume next"))
+                    {
+                        // Handle the If Err.Number <> 0 pattern
+                        for (int j = i + 1; j < procedure.EndLineIndex; j++)
+                        {
+                            string checkLine = lines[j].Trim().ToLower();
+                            if (string.IsNullOrWhiteSpace(checkLine)) continue;
+                            
+                            // Found error check statement
+                            if (checkLine.Contains("if err.") && checkLine.Contains("<> 0"))
+                            {
+                                // Apply same indentation as On Error
+                                lines[j] = indentation + checkLine;
+                                
+                                // Find the matching End If
+                                for (int k = j + 1; k < procedure.EndLineIndex; k++)
+                                {
+                                    string endIfCheck = lines[k].Trim().ToLower();
+                                    
+                                    if (endIfCheck.StartsWith("end if"))
+                                    {
+                                        // End If gets same indentation as If
+                                        lines[k] = indentation + endIfCheck;
+                                        
+                                        // Lines between If and End If get one more level
+                                        for (int m = j + 1; m < k; m++)
+                                        {
+                                            string content = lines[m].Trim();
+                                            if (!string.IsNullOrWhiteSpace(content))
+                                            {
+                                                lines[m] = indentation + "    " + content;
+                                            }
+                                        }
+                                        
+                                        // Check for On Error GoTo 0 after End If
+                                        if (k + 1 < procedure.EndLineIndex)
+                                        {
+                                            string nextLine = lines[k + 1].Trim().ToLower();
+                                            if (nextLine.StartsWith("on error goto 0"))
+                                            {
+                                                lines[k + 1] = indentation + nextLine;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        private int GetIndentationLevel(string line)
+        {
+            int spaces = 0;
+            foreach (char c in line)
+            {
+                if (c == ' ')
+                    spaces++;
+                else
+                    break;
+            }
+            return spaces;
+        }
+        
+        private bool IsDeclarationLine(string line)
+        {
+            line = line.ToLower();
+            return line.StartsWith("dim ") || 
+                   line.StartsWith("private ") || 
+                   line.StartsWith("public ") || 
+                   line.StartsWith("static ") || 
+                   line.StartsWith("const ") || 
+                   line.StartsWith("redim ");
+        }
+
+        private List<ProcedureInfo> FindProcedures(string[] lines, StringBuilder log)
+        {
+            List<ProcedureInfo> procedures = new List<ProcedureInfo>();
+            
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                
+                // Check for procedure start
+                if (IsProcedureStart(line, out string name, out string type))
+                {
+                    int startLine = i;
+                    int endLine = -1;
+                    
+                    // Look for matching End Sub/Function
+                    for (int j = i + 1; j < lines.Length; j++)
+                    {
+                        string endLine1 = lines[j].Trim();
+                        if (IsProcedureEnd(endLine1, type))
+                        {
+                            endLine = j;
+                            break;
+                        }
+                    }
+                    
+                    if (endLine >= 0)
+                    {
+                        // Add procedure to list
+                        procedures.Add(new ProcedureInfo
+                        {
+                            Name = name,
+                            Type = type,
+                            StartLineIndex = startLine,
+                            EndLineIndex = endLine
+                        });
+                        
+                        log.AppendLine($"Found {type} '{name}' from line {startLine + 1} to {endLine + 1}");
+                        
+                        // Skip to end of this procedure
+                        i = endLine;
                     }
                 }
             }
             
             return procedures;
         }
-
-        private bool IsInDeclarationBlock(int lineIndex, Procedure procedure, string[] lines)
+        
+        private bool IsProcedureStart(string line, out string name, out string type)
         {
-            // Declarations are at the top of the procedure
-            // We consider declaration block to be consecutive declaration statements
-            // right after the procedure declaration
+            name = "";
+            type = "";
             
-            List<string> declarationKeywords = new List<string> { 
-                "Dim ", "Private ", "Public ", "Static ", "Const ", "ReDim ", "Set ", "Declare " 
-            };
+            // Check for Sub or Function declaration with optional access modifiers
+            Regex regex = new Regex(@"^\s*(Public\s+|Private\s+|Friend\s+)?(Sub|Function|Property\s+[^\s]+)\s+([^\s(]+)", RegexOptions.IgnoreCase);
+            Match match = regex.Match(line);
             
-            // Start from the procedure start line and go down until we hit the current line
-            for (int i = procedure.StartLineIndex + 1; i < lineIndex; i++)
+            if (match.Success && !line.StartsWith("End ", StringComparison.OrdinalIgnoreCase))
             {
-                string trimmedLine = lines[i].Trim();
-                
-                // Skip empty lines and comments
-                if (string.IsNullOrWhiteSpace(trimmedLine) || trimmedLine.StartsWith("'"))
-                {
-                    continue;
-                }
-                
-                // Check if this line is a declaration
-                bool isDeclaration = false;
-                foreach (var keyword in declarationKeywords)
-                {
-                    if (trimmedLine.StartsWith(keyword, StringComparison.OrdinalIgnoreCase))
-                    {
-                        isDeclaration = true;
-                        break;
-                    }
-                }
-                
-                // If we find a non-declaration line before reaching our target line,
-                // then the target line is not in the declaration block
-                if (!isDeclaration)
-                {
-                    return false;
-                }
-            }
-            
-            // Check if the current line itself is a declaration
-            string currentLine = lines[lineIndex].Trim();
-            foreach (var keyword in declarationKeywords)
-            {
-                if (currentLine.StartsWith(keyword, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                type = match.Groups[2].Value;
+                name = match.Groups[3].Value;
+                return true;
             }
             
             return false;
         }
-
-        private string ExtractProcedureName(string line)
+        
+        private bool IsProcedureEnd(string line, string type)
         {
-            // Extract name from "(Public|Private) Sub Name(...)" or "(Public|Private) Function Name(...)"
-            Regex regex = new Regex(@"(?:Public\s+|Private\s+|Friend\s+)?(?:Sub|Function)\s+([^\s(]+)", RegexOptions.IgnoreCase);
-            Match match = regex.Match(line);
-            if (match.Success && match.Groups.Count > 1)
+            // Handle Property Let/Get/Set separately
+            if (type.StartsWith("Property", StringComparison.OrdinalIgnoreCase))
             {
-                return match.Groups[1].Value;
+                return line.StartsWith("End Property", StringComparison.OrdinalIgnoreCase);
             }
-            return "<unknown>";
+            
+            return line.Equals($"End {type}", StringComparison.OrdinalIgnoreCase);
         }
-    }
-
-    // Helper class to store procedure information
-    class Procedure
-    {
-        public string Name { get; set; }
-        public int StartLineIndex { get; set; } // 0-based
-        public int EndLineIndex { get; set; }   // 0-based
+        
+        #region Helper Classes
+        
+        // Stores information about a procedure
+        private class ProcedureInfo
+        {
+            public string Name { get; set; }
+            public string Type { get; set; } // "Sub" or "Function"
+            public int StartLineIndex { get; set; } // 0-based
+            public int EndLineIndex { get; set; }   // 0-based
+        }
+        
+        #endregion
     }
 }
