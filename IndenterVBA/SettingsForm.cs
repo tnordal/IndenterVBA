@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using System.Reflection;
 
 namespace IndenterVBA
 {
@@ -7,10 +8,42 @@ namespace IndenterVBA
     {
         private IndenterSettings _settings;
 
+        private void AddMenu()
+        {
+            // Create a menu strip
+            MenuStrip menuStrip = new MenuStrip();
+
+            // Create the 'About' menu item
+            ToolStripMenuItem aboutMenuItem = new ToolStripMenuItem("About");
+            aboutMenuItem.Click += AboutMenuItem_Click;
+
+            // Add the 'About' menu item to the menu strip
+            menuStrip.Items.Add(aboutMenuItem);
+
+            // Add the menu strip to the form
+            this.Controls.Add(menuStrip);
+            this.MainMenuStrip = menuStrip;
+            menuStrip.Dock = DockStyle.Top; // Ensure the menu strip is docked at the top
+
+            // Force the menu strip to be visible
+            menuStrip.Visible = true;
+        }
+
+        private void AboutMenuItem_Click(object sender, EventArgs e)
+        {
+            // Get the application name and version
+            string appName = Assembly.GetExecutingAssembly().GetName().Name;
+            string appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+
+            // Show the message box
+            MessageBox.Show($"{appName} - Version {appVersion}", "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         public SettingsForm()
         {
             InitializeComponent();
             _settings = IndenterSettings.Instance;
+            AddMenu();
             LoadSettings();
         }
 
@@ -139,7 +172,7 @@ namespace IndenterVBA
             // 
             // btnSave
             // 
-            this.btnSave.Location = new System.Drawing.Point(120, 255);
+            this.btnSave.Location = new System.Drawing.Point(120, 305);
             this.btnSave.Name = "btnSave";
             this.btnSave.Size = new System.Drawing.Size(75, 23);
             this.btnSave.TabIndex = 4;
@@ -150,7 +183,7 @@ namespace IndenterVBA
             // btnCancel
             // 
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(210, 255);
+            this.btnCancel.Location = new System.Drawing.Point(210, 305);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 5;
@@ -160,7 +193,7 @@ namespace IndenterVBA
             // 
             // btnReset
             // 
-            this.btnReset.Location = new System.Drawing.Point(30, 255);
+            this.btnReset.Location = new System.Drawing.Point(30, 305);
             this.btnReset.Name = "btnReset";
             this.btnReset.Size = new System.Drawing.Size(75, 23);
             this.btnReset.TabIndex = 6;
@@ -173,7 +206,7 @@ namespace IndenterVBA
             this.groupBox1.Controls.Add(this.lblIndentSpaces);
             this.groupBox1.Controls.Add(this.numIndentSpaces);
             this.groupBox1.Controls.Add(this.chkIndentDeclarations);
-            this.groupBox1.Location = new System.Drawing.Point(12, 12);
+            this.groupBox1.Location = new System.Drawing.Point(12, 50);
             this.groupBox1.Name = "groupBox1";
             this.groupBox1.Size = new System.Drawing.Size(285, 100);
             this.groupBox1.TabIndex = 7;
@@ -185,7 +218,7 @@ namespace IndenterVBA
             this.groupBox2.Controls.Add(this.lblLogsPath);
             this.groupBox2.Controls.Add(this.btnOpenLogsFolder);
             this.groupBox2.Controls.Add(this.chkUseLogging);
-            this.groupBox2.Location = new System.Drawing.Point(12, 128);
+            this.groupBox2.Location = new System.Drawing.Point(12, 170);
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.Size = new System.Drawing.Size(285, 110);
             this.groupBox2.TabIndex = 8;
@@ -217,7 +250,7 @@ namespace IndenterVBA
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(309, 290);
+            this.ClientSize = new System.Drawing.Size(309, 340);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBox1);
             this.Controls.Add(this.btnReset);
