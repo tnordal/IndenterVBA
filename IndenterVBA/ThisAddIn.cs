@@ -4,6 +4,7 @@ using Excel = Microsoft.Office.Interop.Excel;
 using Office = Microsoft.Office.Core;
 using Microsoft.Office.Tools.Excel;
 using VBIDE = Microsoft.Vbe.Interop;
+using System.Windows.Forms;
 
 namespace IndenterVBA
 {
@@ -129,12 +130,82 @@ namespace IndenterVBA
 
         private void IndentAllButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
         {
-            System.Windows.Forms.MessageBox.Show("Indent All Modules button clicked");
+            try
+            {
+                var app = this.Application;
+                if (app.VBE.ActiveVBProject == null)
+                {
+                    MessageBox.Show("No active VBA project found.");
+                    return;
+                }
+
+                var vbProject = app.VBE.ActiveVBProject;
+                int moduleCount = 0;
+                
+                // Count total modules for progress information
+                foreach (VBIDE.VBComponent component in vbProject.VBComponents)
+                {
+                    if (IsCodeModule(component.Type))
+                    {
+                        moduleCount++;
+                    }
+                }
+
+                if (moduleCount == 0)
+                {
+                    MessageBox.Show("No code modules found in the active project.");
+                    return;
+                }
+
+                if (MessageBox.Show($"This will indent all {moduleCount} modules in the active project. Continue?", 
+                                    "Confirm Indentation", MessageBoxButtons.YesNo, 
+                                    MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                int processedCount = 0;
+                
+                // Process each module in the project
+                foreach (VBIDE.VBComponent component in vbProject.VBComponents)
+                {
+                    if (IsCodeModule(component.Type))
+                    {
+                        try
+                        {
+                            // Activate this code module
+                            component.CodeModule.CodePane.SetSelection(1, 1, 1, 1);
+                            component.CodeModule.CodePane.Show();
+                            
+                            // Indent the module
+                            vbaIndenter.IndentAllModules(vbProject);
+                            processedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error processing module {component.Name}: {ex.Message}");
+                        }
+                    }
+                }
+
+                MessageBox.Show($"Indentation complete. Processed {processedCount} of {moduleCount} modules.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
         }
 
         private void IndentCurrentModuleButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
         {
-            System.Windows.Forms.MessageBox.Show("Indent Current Module button clicked");
+            try
+            {
+                IndentActiveModule();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
         }
 
         private void IndentCurrentMethodButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
@@ -154,16 +225,32 @@ namespace IndenterVBA
                 var app = this.Application;
                 if (app.VBE.ActiveVBProject == null)
                 {
-                    System.Windows.Forms.MessageBox.Show("No active VBA project found.");
+                    MessageBox.Show("No active VBA project found.");
                     return;
                 }
                 
+                if (app.VBE.ActiveCodePane == null)
+                {
+                    MessageBox.Show("Please open a code module first.");
+                    return;
+                }
+
                 vbaIndenter.IndentAllModules(app.VBE.ActiveVBProject);
+                MessageBox.Show("Current module indentation complete.");
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show("Error: " + ex.Message);
+                MessageBox.Show("Error: " + ex.Message);
             }
+        }
+
+        private bool IsCodeModule(VBIDE.vbext_ComponentType type)
+        {
+            // These are the component types that can contain code
+            return type == VBIDE.vbext_ComponentType.vbext_ct_StdModule ||
+                   type == VBIDE.vbext_ComponentType.vbext_ct_ClassModule ||
+                   type == VBIDE.vbext_ComponentType.vbext_ct_MSForm ||
+                   type == VBIDE.vbext_ComponentType.vbext_ct_Document;
         }
 
         #region VSTO generated code
