@@ -210,7 +210,14 @@ namespace IndenterVBA
 
         private void IndentCurrentMethodButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
         {
-            System.Windows.Forms.MessageBox.Show("Indent Current Method button clicked");
+            try
+            {
+                IndentActiveMethod();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
         }
 
         private void SettingsButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
@@ -237,6 +244,41 @@ namespace IndenterVBA
 
                 vbaIndenter.IndentAllModules(app.VBE.ActiveVBProject);
                 MessageBox.Show("Current module indentation complete.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+        }
+        
+        private void IndentActiveMethod()
+        {
+            try
+            {
+                var app = this.Application;
+                if (app.VBE.ActiveVBProject == null)
+                {
+                    MessageBox.Show("No active VBA project found.");
+                    return;
+                }
+                
+                if (app.VBE.ActiveCodePane == null)
+                {
+                    MessageBox.Show("Please open a code module first.");
+                    return;
+                }
+
+                // Get current selection
+                int startLine, startColumn, endLine, endColumn;
+                app.VBE.ActiveCodePane.GetSelection(out startLine, out startColumn, out endLine, out endColumn);
+                
+                // Call the new method that indents only the current method
+                bool success = vbaIndenter.IndentCurrentProcedure(app.VBE);
+                
+                if (success)
+                {
+                    MessageBox.Show("Current method indentation complete.");
+                }
             }
             catch (Exception ex)
             {

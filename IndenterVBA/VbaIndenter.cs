@@ -17,6 +17,125 @@ namespace IndenterVBA
             // We'll ignore the project parameter and just focus on active code pane
             IndentActiveCodePane(vbProject.VBE);
         }
+        
+        // Indent only the current procedure (method) at cursor position
+        public bool IndentCurrentProcedure(VBIDE.VBE vbe)
+        {
+            try
+            {
+                // Check if we have an active code pane
+                if (vbe.ActiveCodePane == null)
+                {
+                    MessageBox.Show("Please open a code module first.");
+                    return false;
+                }
+
+                // Get the active code module
+                VBIDE.CodeModule codeModule = vbe.ActiveCodePane.CodeModule;
+                if (codeModule == null)
+                {
+                    MessageBox.Show("No active code module found.");
+                    return false;
+                }
+
+                // Get current cursor position
+                int currentLine, currentColumn, endLine, endColumn;
+                vbe.ActiveCodePane.GetSelection(out currentLine, out currentColumn, out endLine, out endColumn);
+
+                // Initialize log
+                StringBuilder log = new StringBuilder();
+                log.AppendLine($"Module: {codeModule.Name}");
+                log.AppendLine($"Current Position: Line {currentLine}, Column {currentColumn}");
+
+                // Get all code from the module
+                string code = "";
+                if (codeModule.CountOfLines > 0)
+                {
+                    code = codeModule.Lines[1, codeModule.CountOfLines];
+                }
+
+                // Create directory if needed
+                Directory.CreateDirectory("C:\\Temp");
+
+                // Log original code
+                File.WriteAllText("C:\\Temp\\Original_Code.txt", code);
+
+                // Split code into lines
+                string[] lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                
+                // Find all procedures in the code
+                List<ProcedureInfo> procedures = FindProcedures(lines, log);
+                
+                // Find the procedure containing the current cursor position
+                ProcedureInfo currentProcedure = null;
+                foreach (var proc in procedures)
+                {
+                    int procStart = proc.StartLineIndex + 1; // 1-based
+                    int procEnd = proc.EndLineIndex + 1; // 1-based
+                    
+                    if (currentLine >= procStart && currentLine <= procEnd)
+                    {
+                        currentProcedure = proc;
+                        break;
+                    }
+                }
+                
+                if (currentProcedure == null)
+                {
+                    MessageBox.Show("Cursor is not within any procedure. Please position the cursor inside a Sub, Function, or Property.");
+                    return false;
+                }
+                
+                log.AppendLine($"\nIndenting procedure: {currentProcedure.Type} {currentProcedure.Name}");
+                
+                // Get a copy of the original lines for comparison
+                string[] originalLines = new string[lines.Length];
+                Array.Copy(lines, originalLines, lines.Length);
+                
+                // Only indent the current procedure
+                SimpleMultiPassIndentation(lines, currentProcedure, log);
+                
+                // Create a new string with the updated code
+                StringBuilder updatedCode = new StringBuilder();
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    updatedCode.AppendLine(lines[i]);
+                }
+                
+                // Write the indented code to a log file for verification
+                File.WriteAllText("C:\\Temp\\Indented_Current_Procedure.txt", updatedCode.ToString());
+                
+                // Apply the changes only to the procedure
+                int procStartLine = currentProcedure.StartLineIndex + 1; // 1-based line number
+                int procEndLine = currentProcedure.EndLineIndex + 1; // 1-based line number
+                int procBodyLineCount = procEndLine - procStartLine + 1;
+                
+                // Get the procedure body from our indented code
+                StringBuilder procBody = new StringBuilder();
+                for (int i = currentProcedure.StartLineIndex; i <= currentProcedure.EndLineIndex; i++)
+                {
+                    procBody.AppendLine(lines[i]);
+                }
+                
+                // Replace the procedure in the module
+                codeModule.DeleteLines(procStartLine, procBodyLineCount);
+                codeModule.InsertLines(procStartLine, procBody.ToString());
+                
+                // Write log
+                File.WriteAllText("C:\\Temp\\VbaIndentLog_CurrentProc.txt", log.ToString());
+                
+                // Position cursor back to the original procedure but at the start
+                vbe.ActiveCodePane.SetSelection(procStartLine, 1, procStartLine, 1);
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}");
+                File.WriteAllText("C:\\Temp\\IndentError.txt", ex.ToString());
+                return false;
+            }
+        }
 
         private void IndentActiveCodePane(VBIDE.VBE vbe)
         {
