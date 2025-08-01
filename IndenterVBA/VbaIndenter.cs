@@ -11,6 +11,13 @@ namespace IndenterVBA
 {
     public class VbaIndenter
     {
+        private readonly IndenterSettings _settings;
+        
+        public VbaIndenter()
+        {
+            _settings = IndenterSettings.Instance;
+        }
+        
         // For simplicity, we'll directly get the active code pane
         public void IndentAllModules(VBIDE.VBProject vbProject)
         {
@@ -55,10 +62,14 @@ namespace IndenterVBA
                 }
 
                 // Create directory if needed
-                Directory.CreateDirectory("C:\\Temp");
+                EnsureLogDirectoryExists();
 
-                // Log original code
-                File.WriteAllText("C:\\Temp\\Original_Code.txt", code);
+                // Log original code if logging is enabled
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("Original_Code.txt");
+                    File.WriteAllText(logFileName, code);
+                }
 
                 // Split code into lines
                 string[] lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
@@ -103,7 +114,11 @@ namespace IndenterVBA
                 }
                 
                 // Write the indented code to a log file for verification
-                File.WriteAllText("C:\\Temp\\Indented_Current_Procedure.txt", updatedCode.ToString());
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("Indented_Current_Procedure.txt");
+                    File.WriteAllText(logFileName, updatedCode.ToString());
+                }
                 
                 // Apply the changes only to the procedure
                 int procStartLine = currentProcedure.StartLineIndex + 1; // 1-based line number
@@ -122,7 +137,11 @@ namespace IndenterVBA
                 codeModule.InsertLines(procStartLine, procBody.ToString());
                 
                 // Write log
-                File.WriteAllText("C:\\Temp\\VbaIndentLog_CurrentProc.txt", log.ToString());
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("VbaIndentLog_CurrentProc.txt");
+                    File.WriteAllText(logFileName, log.ToString());
+                }
                 
                 // Position cursor back to the original procedure but at the start
                 vbe.ActiveCodePane.SetSelection(procStartLine, 1, procStartLine, 1);
@@ -132,7 +151,11 @@ namespace IndenterVBA
             catch (Exception ex)
             {
                 MessageBox.Show($"Error: {ex.Message}");
-                File.WriteAllText("C:\\Temp\\IndentError.txt", ex.ToString());
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("IndentError.txt");
+                    File.WriteAllText(logFileName, ex.ToString());
+                }
                 return false;
             }
         }
@@ -169,17 +192,25 @@ namespace IndenterVBA
                 }
 
                 // Create directory if needed
-                Directory.CreateDirectory("C:\\Temp");
+                EnsureLogDirectoryExists();
 
-                // Log original code
-                File.WriteAllText("C:\\Temp\\Original_Code.txt", code);
+                // Log original code if logging is enabled
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("Original_Code.txt");
+                    File.WriteAllText(logFileName, code);
+                }
 
                 // Process and indent the code
                 log.AppendLine("\nIndenting procedures:");
                 string indentedCode = IndentCode(code, log);
 
                 // Write the indented code to a log file for verification
-                File.WriteAllText("C:\\Temp\\Indented_Code.txt", indentedCode);
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("Indented_Code.txt");
+                    File.WriteAllText(logFileName, indentedCode);
+                }
 
                 // Apply the indented code to the module
                 if (codeModule.CountOfLines > 0)
@@ -189,14 +220,26 @@ namespace IndenterVBA
                 }
 
                 // Write log
-                File.WriteAllText("C:\\Temp\\VbaIndentLog.txt", log.ToString());
-
-                MessageBox.Show("Indentation complete. Check C:\\Temp\\VbaIndentLog.txt for details and C:\\Temp\\Pass_*.txt for debugging information.");
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("VbaIndentLog.txt");
+                    File.WriteAllText(logFileName, log.ToString());
+                    
+                    MessageBox.Show($"Indentation complete. Logs saved to {IndenterSettings.LogsFolder}");
+                }
+                else
+                {
+                    MessageBox.Show("Indentation complete.");
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error: {ex.Message}");
-                File.WriteAllText("C:\\Temp\\IndentError.txt", ex.ToString());
+                if (_settings.UseLogging)
+                {
+                    string logFileName = GetLogFilePath("IndentError.txt");
+                    File.WriteAllText(logFileName, ex.ToString());
+                }
             }
         }
 
@@ -228,9 +271,11 @@ namespace IndenterVBA
         {
             log.AppendLine($"Processing {procedure.Type} {procedure.Name}");
             
-            // Directory for debug files
-            string debugDir = "C:\\Temp";
-            Directory.CreateDirectory(debugDir);
+            // Create debug files if logging is enabled
+            if (_settings.UseLogging)
+            {
+                EnsureLogDirectoryExists();
+            }
             
             // Pass 1: Reset all lines in the procedure to have no indentation
             StringBuilder resetText = new StringBuilder();
@@ -239,32 +284,48 @@ namespace IndenterVBA
                 lines[i] = lines[i].TrimStart();
                 resetText.AppendLine(lines[i]);
             }
-            File.WriteAllText(Path.Combine(debugDir, $"Pass_1_Reset_{procedure.Name}.txt"), resetText.ToString());
+            
+            if (_settings.UseLogging)
+            {
+                string logFileName = GetLogFilePath($"Pass_1_Reset_{procedure.Name}.txt");
+                File.WriteAllText(logFileName, resetText.ToString());
+            }
             
             // Pass 2: Identify blocks and their structure
             List<Tuple<int, int>> blockRanges = IdentifyBlockRanges(lines, procedure);
             
-            // Create debug output for block structure
-            StringBuilder blockDebug = new StringBuilder();
-            blockDebug.AppendLine($"Identified {blockRanges.Count} code blocks in {procedure.Name}:");
-            foreach (var range in blockRanges)
+            if (_settings.UseLogging)
             {
-                string startLine = lines[range.Item1].Trim();
-                string endLine = lines[range.Item2].Trim();
-                blockDebug.AppendLine($"Block from line {range.Item1 + 1} to {range.Item2 + 1}");
-                blockDebug.AppendLine($"  Start: {startLine}");
-                blockDebug.AppendLine($"  End: {endLine}");
+                // Create debug output for block structure
+                StringBuilder blockDebug = new StringBuilder();
+                blockDebug.AppendLine($"Identified {blockRanges.Count} code blocks in {procedure.Name}:");
+                foreach (var range in blockRanges)
+                {
+                    string startLine = lines[range.Item1].Trim();
+                    string endLine = lines[range.Item2].Trim();
+                    blockDebug.AppendLine($"Block from line {range.Item1 + 1} to {range.Item2 + 1}");
+                    blockDebug.AppendLine($"  Start: {startLine}");
+                    blockDebug.AppendLine($"  End: {endLine}");
+                }
+                
+                string logFileName = GetLogFilePath($"Pass_2_Blocks_{procedure.Name}.txt");
+                File.WriteAllText(logFileName, blockDebug.ToString());
             }
-            File.WriteAllText(Path.Combine(debugDir, $"Pass_2_Blocks_{procedure.Name}.txt"), blockDebug.ToString());
             
             // Pass 3: Indent procedure-level statements (level 0)
             ApplyInitialIndentation(lines, procedure);
-            StringBuilder level0Text = new StringBuilder();
-            for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+            
+            if (_settings.UseLogging)
             {
-                level0Text.AppendLine(lines[i]);
+                StringBuilder level0Text = new StringBuilder();
+                for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+                {
+                    level0Text.AppendLine(lines[i]);
+                }
+                
+                string logFileName = GetLogFilePath($"Pass_3_Level0_{procedure.Name}.txt");
+                File.WriteAllText(logFileName, level0Text.ToString());
             }
-            File.WriteAllText(Path.Combine(debugDir, $"Pass_3_Level0_{procedure.Name}.txt"), level0Text.ToString());
             
             // Create a mapping of each line to its indentation level
             Dictionary<int, int> lineIndentLevels = new Dictionary<int, int>();
@@ -283,26 +344,36 @@ namespace IndenterVBA
                     // Apply indentation for this level's blocks
                     ApplyLevelIndentation(lines, blocksByLevel[level], level);
                     
-                    // Output the state after this level
-                    StringBuilder levelText = new StringBuilder();
-                    for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+                    if (_settings.UseLogging)
                     {
-                        levelText.AppendLine(lines[i]);
+                        // Output the state after this level
+                        StringBuilder levelText = new StringBuilder();
+                        for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+                        {
+                            levelText.AppendLine(lines[i]);
+                        }
+                        
+                        string logFileName = GetLogFilePath($"Pass_4_Level{level}_{procedure.Name}.txt");
+                        File.WriteAllText(logFileName, levelText.ToString());
                     }
-                    File.WriteAllText(Path.Combine(debugDir, $"Pass_4_Level{level}_{procedure.Name}.txt"), levelText.ToString());
                 }
             }
             
             // Pass 5: Special cases (error handling)
             ProcessErrorHandling(lines, procedure);
             
-            // Final output
-            StringBuilder finalText = new StringBuilder();
-            for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+            if (_settings.UseLogging)
             {
-                finalText.AppendLine(lines[i]);
+                // Final output
+                StringBuilder finalText = new StringBuilder();
+                for (int i = procedure.StartLineIndex; i <= procedure.EndLineIndex; i++)
+                {
+                    finalText.AppendLine(lines[i]);
+                }
+                
+                string logFileName = GetLogFilePath($"Pass_5_Final_{procedure.Name}.txt");
+                File.WriteAllText(logFileName, finalText.ToString());
             }
-            File.WriteAllText(Path.Combine(debugDir, $"Pass_5_Final_{procedure.Name}.txt"), finalText.ToString());
         }
 
         private List<Tuple<int, int>> IdentifyBlockRanges(string[] lines, ProcedureInfo procedure)
@@ -445,16 +516,24 @@ namespace IndenterVBA
                 // Check if this is a declaration
                 if (inDeclarationSection && IsDeclarationLine(line))
                 {
-                    // No indentation for declarations
-                    lines[i] = line;
+                    if (_settings.IndentDeclarations)
+                    {
+                        // Add indentation to declarations if the setting is enabled
+                        lines[i] = new string(' ', _settings.IndentSpaces) + line;
+                    }
+                    else
+                    {
+                        // No indentation for declarations if the setting is disabled
+                        lines[i] = line;
+                    }
                 }
                 else
                 {
                     // Once we hit a non-declaration, all following lines are indented
                     inDeclarationSection = false;
                     
-                    // Add basic indentation (4 spaces) to the procedure body
-                    lines[i] = "    " + line;
+                    // Add basic indentation to the procedure body using the configured number of spaces
+                    lines[i] = new string(' ', _settings.IndentSpaces) + line;
                 }
             }
         }
@@ -468,8 +547,8 @@ namespace IndenterVBA
                 string startLineText = lines[startLine].Trim();
                 string endLineText = lines[endLine].Trim();
                 
-                // Calculate indentation for this level
-                string indent = new string(' ', level * 4);
+                // Calculate indentation for this level using the configured number of spaces
+                string indent = new string(' ', level * _settings.IndentSpaces);
                 
                 // Apply indentation to block start and end lines
                 lines[startLine] = indent + startLineText;
@@ -496,14 +575,14 @@ namespace IndenterVBA
                 if (IsBlockMidpoint(line))
                 {
                     // Block midpoints get the same indentation as the block start
-                    lines[i] = new string(' ', level * 4) + line;
+                    lines[i] = new string(' ', level * _settings.IndentSpaces) + line;
                 }
                 // Lines inside the block that aren't already the start/end of another block
                 // and aren't block midpoints get one more level of indentation
                 else if (!IsBlockBoundary(line))
                 {
-                    // Contents get indented one more level
-                    lines[i] = new string(' ', (level + 1) * 4) + line;
+                    // Contents get indented one more level using the configured number of spaces
+                    lines[i] = new string(' ', (level + 1) * _settings.IndentSpaces) + line;
                 }
             }
         }
@@ -596,7 +675,7 @@ namespace IndenterVBA
                                             string content = lines[m].Trim();
                                             if (!string.IsNullOrWhiteSpace(content))
                                             {
-                                                lines[m] = indentation + "    " + content;
+                                                lines[m] = indentation + new string(' ', _settings.IndentSpaces) + content;
                                             }
                                         }
                                         
@@ -720,6 +799,25 @@ namespace IndenterVBA
             
             return line.Equals($"End {type}", StringComparison.OrdinalIgnoreCase);
         }
+        
+        #region Helper Methods for Logging
+        
+        private void EnsureLogDirectoryExists()
+        {
+            // This will create the directory if it doesn't exist
+            string path = IndenterSettings.LogsFolder;
+        }
+        
+        private string GetLogFilePath(string fileName)
+        {
+            // Generate a timestamped filename to avoid overwriting previous logs
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileNameWithTimestamp = $"{Path.GetFileNameWithoutExtension(fileName)}_{timestamp}{Path.GetExtension(fileName)}";
+            
+            return Path.Combine(IndenterSettings.LogsFolder, fileNameWithTimestamp);
+        }
+        
+        #endregion
         
         #region Helper Classes
         

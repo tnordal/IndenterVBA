@@ -185,8 +185,12 @@
     can be found.
   -->
   <ItemGroup>
+    <Compile Include="IndenterSettings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SettingsForm.cs">
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="VbaIndenter.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">

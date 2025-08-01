@@ -222,7 +222,25 @@ namespace IndenterVBA
 
         private void SettingsButton_Click(Office.CommandBarButton Ctrl, ref bool CancelDefault)
         {
-            System.Windows.Forms.MessageBox.Show("Settings button clicked");
+            try
+            {
+                using (var settingsForm = new SettingsForm())
+                {
+                    // Show the settings form as a modal dialog
+                    DialogResult result = settingsForm.ShowDialog();
+                    
+                    // If the user clicked Save, refresh the VbaIndenter instance to use the new settings
+                    if (result == DialogResult.OK)
+                    {
+                        // Create a new VbaIndenter to pick up the new settings
+                        vbaIndenter = new VbaIndenter();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error showing settings: {ex.Message}", "Settings Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void IndentActiveModule()
@@ -243,7 +261,6 @@ namespace IndenterVBA
                 }
 
                 vbaIndenter.IndentAllModules(app.VBE.ActiveVBProject);
-                MessageBox.Show("Current module indentation complete.");
             }
             catch (Exception ex)
             {
