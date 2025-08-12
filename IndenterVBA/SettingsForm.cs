@@ -31,12 +31,14 @@ namespace IndenterVBA
 
         private void AboutMenuItem_Click(object sender, EventArgs e)
         {
-            // Get the application name and version
+            // Get the application name, version, and description
             string appName = Assembly.GetExecutingAssembly().GetName().Name;
             string appVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string appDescription = ((AssemblyDescriptionAttribute)Attribute.GetCustomAttribute(
+                Assembly.GetExecutingAssembly(), typeof(AssemblyDescriptionAttribute)))?.Description;
 
             // Show the message box
-            MessageBox.Show($"{appName} - Version {appVersion}", "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"{appName} - Version {appVersion}\n{appDescription}", "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public SettingsForm()
