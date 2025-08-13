@@ -54,6 +54,7 @@ namespace IndenterVBA
             numIndentSpaces.Value = _settings.IndentSpaces;
             chkIndentDeclarations.Checked = _settings.IndentDeclarations;
             chkUseLogging.Checked = _settings.UseLogging;
+            chkIndentSelectCaseStatements.Checked = _settings.IndentSelectCaseStatements;
         }
 
         private void SaveSettings()
@@ -61,6 +62,7 @@ namespace IndenterVBA
             _settings.IndentSpaces = (int)numIndentSpaces.Value;
             _settings.IndentDeclarations = chkIndentDeclarations.Checked;
             _settings.UseLogging = chkUseLogging.Checked;
+            _settings.IndentSelectCaseStatements = chkIndentSelectCaseStatements.Checked;
             _settings.Save();
         }
 
@@ -115,6 +117,7 @@ namespace IndenterVBA
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.btnOpenLogsFolder = new System.Windows.Forms.Button();
             this.lblLogsPath = new System.Windows.Forms.Label();
+            this.chkIndentSelectCaseStatements = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.numIndentSpaces)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -208,9 +211,10 @@ namespace IndenterVBA
             this.groupBox1.Controls.Add(this.lblIndentSpaces);
             this.groupBox1.Controls.Add(this.numIndentSpaces);
             this.groupBox1.Controls.Add(this.chkIndentDeclarations);
+            this.groupBox1.Controls.Add(this.chkIndentSelectCaseStatements);
             this.groupBox1.Location = new System.Drawing.Point(12, 50);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(285, 100);
+            this.groupBox1.Size = new System.Drawing.Size(285, 130);
             this.groupBox1.TabIndex = 7;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Indentation Settings";
@@ -220,7 +224,7 @@ namespace IndenterVBA
             this.groupBox2.Controls.Add(this.lblLogsPath);
             this.groupBox2.Controls.Add(this.btnOpenLogsFolder);
             this.groupBox2.Controls.Add(this.chkUseLogging);
-            this.groupBox2.Location = new System.Drawing.Point(12, 170);
+            this.groupBox2.Location = new System.Drawing.Point(12, 190);
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.Size = new System.Drawing.Size(285, 110);
             this.groupBox2.TabIndex = 8;
@@ -245,6 +249,16 @@ namespace IndenterVBA
             this.lblLogsPath.Size = new System.Drawing.Size(113, 13);
             this.lblLogsPath.TabIndex = 5;
             this.lblLogsPath.Text = "Logs saved in MyDocs\\IndentVBA\\logs";
+            // 
+            // chkIndentSelectCaseStatements
+            // 
+            this.chkIndentSelectCaseStatements.AutoSize = true;
+            this.chkIndentSelectCaseStatements.Location = new System.Drawing.Point(18, 90);
+            this.chkIndentSelectCaseStatements.Name = "chkIndentSelectCaseStatements";
+            this.chkIndentSelectCaseStatements.Size = new System.Drawing.Size(250, 17);
+            this.chkIndentSelectCaseStatements.TabIndex = 3;
+            this.chkIndentSelectCaseStatements.Text = "Indent Select Case statements (aligned or nested)";
+            this.chkIndentSelectCaseStatements.UseVisualStyleBackColor = true;
             // 
             // SettingsForm
             // 
@@ -284,5 +298,6 @@ namespace IndenterVBA
         private System.Windows.Forms.GroupBox groupBox2;
         private System.Windows.Forms.Button btnOpenLogsFolder;
         private System.Windows.Forms.Label lblLogsPath;
+        private System.Windows.Forms.CheckBox chkIndentSelectCaseStatements;
     }
 }

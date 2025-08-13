@@ -507,12 +507,15 @@ namespace IndenterVBA
         {
             // Declarations are at the start and get no indentation
             bool inDeclarationSection = true;
-            
+
             for (int i = procedure.StartLineIndex + 1; i < procedure.EndLineIndex; i++)
             {
                 string line = lines[i].Trim();
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                
+
+                // Check if this is a comment line
+                bool isCommentLine = line.StartsWith("'");
+
                 // Check if this is a declaration
                 if (inDeclarationSection && IsDeclarationLine(line))
                 {
@@ -527,11 +530,11 @@ namespace IndenterVBA
                         lines[i] = line;
                     }
                 }
-                else
+                else if (!isCommentLine)
                 {
-                    // Once we hit a non-declaration, all following lines are indented
+                    // Once we hit a non-declaration and non-comment, all following lines are indented
                     inDeclarationSection = false;
-                    
+
                     // Add basic indentation to the procedure body using the configured number of spaces
                     lines[i] = new string(' ', _settings.IndentSpaces) + line;
                 }
@@ -564,21 +567,41 @@ namespace IndenterVBA
             // Get the block type from the start line
             string blockStart = lines[startLine].Trim().ToLower();
             bool isForEachBlock = blockStart.StartsWith("for each ");
-            
+            bool isSelectCaseBlock = blockStart.StartsWith("select case");
+
             // Apply indentation to content lines
             for (int i = startLine + 1; i < endLine; i++)
             {
                 string line = lines[i].Trim();
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                
+
                 // Special case handling for block midpoints (else, elseif, case)
                 if (IsBlockMidpoint(line))
                 {
                     // Block midpoints get the same indentation as the block start
-                    lines[i] = new string(' ', level * _settings.IndentSpaces) + line;
+                    if (isSelectCaseBlock && !_settings.IndentSelectCaseStatements)
+                    {
+                        // Apply the first style (aligned with Select Case)
+                        lines[i] = new string(' ', level * _settings.IndentSpaces) + line;
+                    }
+                    else
+                    {
+                        // Apply the second style (indented further)
+                        lines[i] = new string(' ', (level + 1) * _settings.IndentSpaces) + line;
+                    }
                 }
-                // Lines inside the block that aren't already the start/end of another block
-                // and aren't block midpoints get one more level of indentation
+                else if (isSelectCaseBlock)
+                {
+                    // For Select Case, indent the code following Case statements
+                    if (_settings.IndentSelectCaseStatements)
+                    {
+                        lines[i] = new string(' ', (level + 2) * _settings.IndentSpaces) + line;
+                    }
+                    else
+                    {
+                        lines[i] = new string(' ', (level + 1) * _settings.IndentSpaces) + line;
+                    }
+                }
                 else if (!IsBlockBoundary(line))
                 {
                     // Contents get indented one more level using the configured number of spaces

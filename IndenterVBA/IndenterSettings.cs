@@ -11,11 +11,13 @@ namespace IndenterVBA
         private const int DefaultIndentSpaces = 4;
         private const bool DefaultIndentDeclarations = false;
         private const bool DefaultUseLogging = true;
+        private const bool DefaultIndentSelectCaseStatements = true; // Default to true for the second style
 
         // Properties with default values
         public int IndentSpaces { get; set; } = DefaultIndentSpaces;
         public bool IndentDeclarations { get; set; } = DefaultIndentDeclarations;
         public bool UseLogging { get; set; } = DefaultUseLogging;
+        public bool IndentSelectCaseStatements { get; set; } = DefaultIndentSelectCaseStatements;
 
         // Singleton instance
         private static IndenterSettings _instance;
@@ -110,6 +112,7 @@ namespace IndenterVBA
             IndentSpaces = DefaultIndentSpaces;
             IndentDeclarations = DefaultIndentDeclarations;
             UseLogging = DefaultUseLogging;
+            IndentSelectCaseStatements = DefaultIndentSelectCaseStatements;
         }
     }
 }
