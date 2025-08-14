@@ -77,7 +77,7 @@ namespace IndenterVBA
                     Office.MsoControlType.msoControlButton,
                     Temporary: true);
                 indentAllButton.Caption = "Indent All Modules";
-                indentAllButton.FaceId = 59;
+                indentAllButton.FaceId = 487;
                 indentAllButton.Visible = true;
                 indentAllButton.Click += new Office._CommandBarButtonEvents_ClickEventHandler(IndentAllButton_Click);
 
@@ -85,7 +85,7 @@ namespace IndenterVBA
                     Office.MsoControlType.msoControlButton,
                     Temporary: true);
                 indentCurrentModuleButton.Caption = "Indent Current Module";
-                indentCurrentModuleButton.FaceId = 59;
+                indentCurrentModuleButton.FaceId = 486;
                 indentCurrentModuleButton.Visible = true;
                 indentCurrentModuleButton.Click += new Office._CommandBarButtonEvents_ClickEventHandler(IndentCurrentModuleButton_Click);
 
@@ -93,7 +93,7 @@ namespace IndenterVBA
                     Office.MsoControlType.msoControlButton,
                     Temporary: true);
                 indentCurrentMethodButton.Caption = "Indent Current Method";
-                indentCurrentMethodButton.FaceId = 59;
+                indentCurrentMethodButton.FaceId = 108;
                 indentCurrentMethodButton.Visible = true;
                 indentCurrentMethodButton.Click += new Office._CommandBarButtonEvents_ClickEventHandler(IndentCurrentMethodButton_Click);
 
@@ -101,7 +101,7 @@ namespace IndenterVBA
                     Office.MsoControlType.msoControlButton,
                     Temporary: true);
                 settingsButton.Caption = "Settings";
-                settingsButton.FaceId = 59;
+                settingsButton.FaceId = 19;
                 settingsButton.Visible = true;
                 settingsButton.Click += new Office._CommandBarButtonEvents_ClickEventHandler(SettingsButton_Click);
             }
